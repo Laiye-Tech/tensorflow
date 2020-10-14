@@ -16,6 +16,8 @@ limitations under the License.
 #include "tensorflow/cc/saved_model/reader.h"
 
 #include <unordered_set>
+#include <iomanip>
+#include <sstream>
 
 #include "absl/memory/memory.h"
 #include "tensorflow/cc/saved_model/constants.h"

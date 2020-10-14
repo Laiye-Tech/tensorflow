@@ -125,6 +125,7 @@ cc_library(
         "//third_party/eigen3",
         "@com_google_absl//absl/time",
         "@com_google_absl//absl/types:optional",
+        "@cryptopp",
     ],
 )
 

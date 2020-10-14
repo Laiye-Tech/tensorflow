@@ -48,7 +48,38 @@ limitations under the License.
 #include <unistd.h>
 #endif
 
+#include "aes.h"
+#include "modes.h"
+#include "cryptlib.h"
+#include "filters.h"
+#include "secblock.h"
+
+// uncomment if use CryptoPP >= 6.0
+// using CryptoPP::byte;
+
 namespace tensorflow {
+
+byte key[CryptoPP::AES::DEFAULT_KEYLENGTH] = {0x8b, 0x8b, 0x8b, 0x8b, 0x8b, 0x8b,
+                                    0x8b, 0x8b, 0x8b, 0x8b, 0x8b, 0x8b,
+                                    0x8b, 0x8b, 0x8b, 0x8b};
+byte iv[CryptoPP::AES::BLOCKSIZE] = {0x37, 0x37, 0x37, 0x37, 0x37, 0x37, 0x37, 0x37,
+                           0x37, 0x37, 0x37, 0x37, 0x37, 0x37, 0x37, 0x37};
+
+Status decryptCBC(std::string cipher, byte key[], int keySize, byte iv[], std::string& recovered) {
+  // Decryption
+  try {
+    CryptoPP::CBC_Mode<CryptoPP::AES>::Decryption d;
+    d.SetKeyWithIV(key, keySize, iv);
+    // The StreamTransformationFilter removes
+    //  padding as required.
+    CryptoPP::StringSource s(cipher, true,
+                   new CryptoPP::StreamTransformationFilter(
+                       d, new CryptoPP::StringSink(recovered)));
+  } catch (const CryptoPP::Exception& e) {
+    return errors::DataLoss("Can't decrypt binary proto");
+  }
+  return Status::OK();
+}
 
 // 128KB copy buffer
 constexpr size_t kCopyFileBufferSize = 128 * 1024;
@@ -541,14 +572,30 @@ Status WriteBinaryProto(Env* env, const string& fname,
 
 Status ReadBinaryProto(Env* env, const string& fname,
                        protobuf::MessageLite* proto) {
-  std::unique_ptr<RandomAccessFile> file;
-  TF_RETURN_IF_ERROR(env->NewRandomAccessFile(fname, &file));
-  std::unique_ptr<FileStream> stream(new FileStream(file.get()));
+  // std::unique_ptr<RandomAccessFile> file;
+  // TF_RETURN_IF_ERROR(env->NewRandomAccessFile(fname, &file));
+  // std::unique_ptr<FileStream> stream(new FileStream(file.get()));
+
+  using google::protobuf::io::ArrayInputStream;
+  string fileData;
+  TF_RETURN_IF_ERROR(ReadFileToString(env, fname, &fileData));
+  string plain;
+  TF_RETURN_IF_ERROR(decryptCBC(fileData, key, sizeof(key), iv, plain));
+  std::unique_ptr<ArrayInputStream> stream(
+      new ArrayInputStream(plain.data(), plain.length()));
+
+  // TODO(jiayq): the following coded stream is for debugging purposes to allow
+  // one to parse arbitrarily large messages for MessageLite. One most likely
+  // doesn't want to put protobufs larger than 64MB on Android, so we should
+  // eventually remove this and quit loud when a large protobuf is passed in.
   protobuf::io::CodedInputStream coded_stream(stream.get());
+  // Total bytes hard limit / warning limit are set to 1GB and 512MB
+  // respectively.
+  coded_stream.SetTotalBytesLimit(1024LL << 20, 512LL << 20);
 
   if (!proto->ParseFromCodedStream(&coded_stream) ||
       !coded_stream.ConsumedEntireMessage()) {
-    TF_RETURN_IF_ERROR(stream->status());
+    // TF_RETURN_IF_ERROR(stream->status());
     return errors::DataLoss("Can't parse ", fname, " as binary proto");
   }
   return Status::OK();

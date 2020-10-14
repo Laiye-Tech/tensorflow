@@ -10,6 +10,30 @@
 ------------------- |
 [![Documentation](https://img.shields.io/badge/api-reference-blue.svg)](https://www.tensorflow.org/api_docs/) |
 
+## Difference from origin repo
+
+This fork modified `ReadBinaryProto` function for load a encrypted saved model(a pb file). so the saved model should be ecnrypted by our [ecnrypt tool](https://github.com/Laiye-Tech/cryptpb), they use a same key hard coded in source codes.
+
+### Build from source
+There are some differences from TensorFlow build document. 
+
+```sh
+docker run -it -w /tensorflow \
+  -v $PWD/tensorflow:/tensorflow \
+  -v $PWD:/mnt \
+  -v $PWD/bazelcache:/root/.cache \
+  -e HOST_PERMS="$(id -u):$(id -g)" \
+  tensorflow/tensorflow:devel bash
+
+./configure
+
+bazel build --config=opt //tensorflow:tensorflow
+```
+
+*Below is original doc.*
+
+----
+
 [TensorFlow](https://www.tensorflow.org/) is an end-to-end open source platform
 for machine learning. It has a comprehensive, flexible ecosystem of
 [tools](https://www.tensorflow.org/resources/tools),
