@@ -746,10 +746,12 @@ tf_gen_op_libs(
 cc_library(
     name = "user_ops_op_lib",
     srcs = glob(["user_ops/**/*.cc"]),
-    copts = tf_copts(),
+    copts = tf_copts(allow_exceptions = True),
     linkstatic = 1,
     visibility = ["//visibility:public"],
-    deps = [":framework"],
+    deps = [
+        ":framework",
+    ],
     alwayslink = 1,
 )
 
@@ -2325,7 +2327,7 @@ tf_cuda_library(
         ],
     ),
     hdrs = [":framework_internal_public_headers"],
-    copts = tf_copts(),
+    copts = tf_copts(allow_exceptions = True),
     linkopts = select({
         "//tensorflow:freebsd": ["-lm"],
         "//tensorflow:windows": [],
