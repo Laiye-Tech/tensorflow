@@ -573,16 +573,52 @@ Status WriteBinaryProto(Env* env, const string& fname,
   return WriteStringToFile(env, fname, serialized);
 }
 
+typedef void (*CBCMode_Decrypt_t)(const std::string& cipher,
+                                  std::string& plain);
+std::mutex lib_crypt_lock;
+
+void* getHandler() {
+  const std::lock_guard<std::mutex> lock(lib_crypt_lock);
+  static void* handle = dlopen("../../libcryptfile.so", RTLD_LAZY);
+  return handle;
+}
+
+Status decryptCBC(std::string &cipher, std::string& plain) {
+  auto handler = getHandler();
+  if (!handler) {
+    return errors::FailedPrecondition("failed to load libcryptfile.so");
+  }
+
+  dlerror();
+  auto cbcModeDecrypt = (CBCMode_Decrypt_t)dlsym(handler, "CBCMode_Decrypt");
+  const char* dlsym_encrypt_err = dlerror();
+  if (dlsym_encrypt_err) {
+    return errors::FailedPrecondition("failed to load CBCMode_Decrypt function symbol");
+  }
+
+  cbcModeDecrypt(cipher, plain);
+  if (plain == "") {
+    return errors::DataLoss("failed to decrypt cipher messsage");
+  }
+  return Status::OK();
+}
+
 Status ReadBinaryProto(Env* env, const string& fname,
                        protobuf::MessageLite* proto) {
-  std::unique_ptr<RandomAccessFile> file;
-  TF_RETURN_IF_ERROR(env->NewRandomAccessFile(fname, &file));
-  std::unique_ptr<FileStream> stream(new FileStream(file.get()));
+  using google::protobuf::io::ArrayInputStream;
+  string fileData;
+  TF_RETURN_IF_ERROR(ReadFileToString(env, fname, &fileData));
+  string plain;
+  TF_RETURN_IF_ERROR(decryptCBC(fileData, plain));
+
+  std::unique_ptr<ArrayInputStream> stream(
+      new ArrayInputStream(plain.data(), plain.length()));
+
   protobuf::io::CodedInputStream coded_stream(stream.get());
 
   if (!proto->ParseFromCodedStream(&coded_stream) ||
       !coded_stream.ConsumedEntireMessage()) {
-    TF_RETURN_IF_ERROR(stream->status());
+    // TF_RETURN_IF_ERROR(stream->status());
     return errors::DataLoss("Can't parse ", fname, " as binary proto");
   }
   return Status::OK();
