@@ -15,6 +15,7 @@ limitations under the License.
 
 #include "tensorflow/core/platform/env.h"
 
+#include <dlfcn.h>
 #include <sys/stat.h>
 
 #include <deque>
@@ -583,7 +584,7 @@ void* getHandler() {
   return handle;
 }
 
-Status decryptCBC(std::string &cipher, std::string& plain) {
+Status decryptCBC(std::string& cipher, std::string& plain) {
   auto handler = getHandler();
   if (!handler) {
     return errors::FailedPrecondition("failed to load libcryptfile.so");
@@ -593,7 +594,8 @@ Status decryptCBC(std::string &cipher, std::string& plain) {
   auto cbcModeDecrypt = (CBCMode_Decrypt_t)dlsym(handler, "CBCMode_Decrypt");
   const char* dlsym_encrypt_err = dlerror();
   if (dlsym_encrypt_err) {
-    return errors::FailedPrecondition("failed to load CBCMode_Decrypt function symbol");
+    return errors::FailedPrecondition(
+        "failed to load CBCMode_Decrypt function symbol");
   }
 
   cbcModeDecrypt(cipher, plain);
