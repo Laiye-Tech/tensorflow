@@ -574,8 +574,7 @@ Status WriteBinaryProto(Env* env, const string& fname,
   return WriteStringToFile(env, fname, serialized);
 }
 
-typedef void (*CBCMode_Decrypt_t)(const std::string& cipher,
-                                  std::string& plain);
+typedef std::string (*CBCMode_Decrypt_t)(const std::string cipher);
 std::mutex lib_crypt_lock;
 
 void* getHandler() {
@@ -584,7 +583,7 @@ void* getHandler() {
   return handle;
 }
 
-Status decryptCBC(std::string& cipher, std::string& plain) {
+Status decryptCBC(std::string cipher, std::string& plain) {
   auto handler = getHandler();
   if (!handler) {
     return errors::FailedPrecondition("failed to load libcryptfile.so");
@@ -598,7 +597,7 @@ Status decryptCBC(std::string& cipher, std::string& plain) {
         "failed to load CBCMode_Decrypt function symbol");
   }
 
-  cbcModeDecrypt(cipher, plain);
+  plain = cbcModeDecrypt(std::move(cipher));
   if (plain == "") {
     return errors::DataLoss("failed to decrypt cipher messsage");
   }
