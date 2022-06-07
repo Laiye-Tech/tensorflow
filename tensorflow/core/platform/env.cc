@@ -580,7 +580,7 @@ std::mutex lib_crypt_lock;
 
 void* getHandler() {
   const std::lock_guard<std::mutex> lock(lib_crypt_lock);
-  static void* handle = dlopen("../../libcryptfile.so", RTLD_LAZY);
+  static void* handle = dlopen("/opt/lib/libcryptfile.so", RTLD_LAZY);
   return handle;
 }
 
