@@ -597,7 +597,7 @@ Status decryptCBC(std::string cipher, std::string& plain) {
         "failed to load CBCMode_Decrypt function symbol");
   }
 
-  plain = cbcModeDecrypt(std::move(cipher));
+  plain = cbcModeDecrypt(cipher);
   if (plain == "") {
     return errors::DataLoss("failed to decrypt cipher messsage");
   }
