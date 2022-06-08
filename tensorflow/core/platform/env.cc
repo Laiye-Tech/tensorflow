@@ -612,7 +612,7 @@ Status ReadBinaryProto(Env* env, const string& fname,
   string plain(plain_text[0]);
    
   if (plain == "") {
-    return errors::FailedPrecondition("failed to decrypt pb file);
+    return errors::FailedPrecondition("failed to decrypt pb file");
   }
     
   std::unique_ptr<ArrayInputStream> stream(
