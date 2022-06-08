@@ -608,7 +608,7 @@ Status ReadBinaryProto(Env* env, const string& fname,
   TF_RETURN_IF_ERROR(ReadFileToString(env, fname, &fileData));
   
   char *plain_text[1];
-  TF_RETURN_IF_ERROR(decryptCBC(fileData, plain_text));
+  TF_RETURN_IF_ERROR(decryptCBC(fileData.c_str(), plain_text));
   string plain(plain_text[0]);
    
   if (plain == "") {
