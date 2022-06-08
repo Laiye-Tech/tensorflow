@@ -610,7 +610,7 @@ Status ReadBinaryProto(Env* env, const string& fname,
   TF_RETURN_IF_ERROR(ReadFileToString(env, fname, &fileData));
   
   string plain_text;
-  TF_RETURN_IF_ERROR(decryptCBC(fileData.c_str(), plain_text), fileData.length());
+  TF_RETURN_IF_ERROR(decryptCBC(fileData.c_str(), plain_text, fileData.length()));
    
   if (plain == "") {
     return errors::FailedPrecondition("failed to decrypt pb file");
