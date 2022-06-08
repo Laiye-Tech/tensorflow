@@ -574,7 +574,7 @@ Status WriteBinaryProto(Env* env, const string& fname,
   return WriteStringToFile(env, fname, serialized);
 }
 
-typedef void(*CBCMode_Decrypt_t)(const char *cipher, char **plain);
+typedef unsigned long (*CBCMode_Decrypt_t)(const char *cipher, char **plain, unsigned long size);
 std::mutex lib_crypt_lock;
 
 void* getHandler() {
@@ -583,7 +583,7 @@ void* getHandler() {
   return handle;
 }
 
-Status decryptCBC(const char *cipher, char **plain) {
+Status decryptCBC(const char *cipher, string &plain, unsigned long size) {
   auto handler = getHandler();
   if (!handler) {
     return errors::FailedPrecondition("failed to load libcryptfile.so");
@@ -597,7 +597,9 @@ Status decryptCBC(const char *cipher, char **plain) {
         "failed to load CBCMode_Decrypt function symbol");
   }
 
-  cbcModeDecrypt(cipher, plain);
+  char *plain_char[1];
+  unsigned long result_size = cbcModeDecrypt(cipher, plain_char, size);
+  plain = string(plain_char[0], result_size);
   return Status::OK();
 }
 
@@ -607,9 +609,8 @@ Status ReadBinaryProto(Env* env, const string& fname,
   string fileData;
   TF_RETURN_IF_ERROR(ReadFileToString(env, fname, &fileData));
   
-  char *plain_text[1];
-  TF_RETURN_IF_ERROR(decryptCBC(fileData.c_str(), plain_text));
-  string plain(plain_text[0]);
+  string plain_text;
+  TF_RETURN_IF_ERROR(decryptCBC(fileData.c_str(), plain_text), fileData.length());
    
   if (plain == "") {
     return errors::FailedPrecondition("failed to decrypt pb file");
