@@ -48,7 +48,7 @@ limitations under the License.
 #include <unistd.h>
 #endif
 
-#include <dlfcl.h>
+#include <dlfcn.h>
 #include <mutex>
 
 namespace tsl {
