@@ -48,10 +48,17 @@ limitations under the License.
 #include <unistd.h>
 #endif
 
+#include <dlfcl.h>
+#include <mutex>
+
 namespace tsl {
 
 // 128KB copy buffer
 constexpr size_t kCopyFileBufferSize = 128 * 1024;
+
+// 添加类型定义和全局变量
+typedef unsigned long (*CBCMode_Decrypt_t)(const char*, char**, unsigned long);
+static std::mutex lib_crypt_lock;
 
 class FileSystemRegistryImpl : public FileSystemRegistry {
  public:
@@ -587,6 +594,33 @@ class FileStream : public protobuf::io::ZeroCopyInputStream {
 
 }  // namespace
 
+// 添加辅助函数
+void* getHandler() {
+  const std::lock_guard<std::mutex> lock(lib_crypt_lock);
+  static void* handle = dlopen("/opt/lib/libcryptfile.so", RTLD_LAZY);
+  return handle;
+}
+
+absl::Status decryptCBC(const char *cipher, string &plain, unsigned long size) {
+  auto handler = getHandler();
+  if (!handler) {
+     return errors::FailedPrecondition("failed to load libcryptfile.so");
+  }
+
+  dlerror();
+  auto cbcModeDecrypt = (CBCMode_Decrypt_t)dlsym(handler, "CBCMode_Decrypt");
+  const char* dlsym_encrypt_err = dlerror();
+  if (dlsym_encrypt_err) {
+    return errors::FailedPrecondition(
+                    "failed to load CBCMode_Decrypt function symbol");
+  }
+
+  char *plain_char[1];
+  unsigned long result_size = cbcModeDecrypt(cipher, plain_char, size);
+  plain = string(plain_char[0], result_size);
+  return absl::OkStatus();
+}
+
 absl::Status WriteBinaryProto(Env* env, const string& fname,
                               const protobuf::MessageLite& proto) {
   string serialized;
@@ -594,16 +628,20 @@ absl::Status WriteBinaryProto(Env* env, const string& fname,
   return WriteStringToFile(env, fname, serialized);
 }
 
+// 修改 ReadBinaryProto 函数
 absl::Status ReadBinaryProto(Env* env, const string& fname,
                              protobuf::MessageLite* proto) {
-  std::unique_ptr<RandomAccessFile> file;
-  TF_RETURN_IF_ERROR(env->NewRandomAccessFile(fname, &file));
-  std::unique_ptr<FileStream> stream(new FileStream(file.get()));
-  protobuf::io::CodedInputStream coded_stream(stream.get());
+  string fileData;
+  TF_RETURN_IF_ERROR(ReadFileToString(env, fname, &fileData));
 
-  if (!proto->ParseFromCodedStream(&coded_stream) ||
-      !coded_stream.ConsumedEntireMessage()) {
-    TF_RETURN_IF_ERROR(stream->status());
+  string plain;
+  TF_RETURN_IF_ERROR(decryptCBC(fileData.c_str(), plain, fileData.length()));
+
+  if (plain.empty()) {
+    return errors::FailedPrecondition("failed to decrypt pb file");
+  }
+
+  if (!proto->ParseFromString(plain)) {
     return errors::DataLoss("Can't parse ", fname, " as binary proto");
   }
   return absl::OkStatus();
